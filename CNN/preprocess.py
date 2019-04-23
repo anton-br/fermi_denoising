@@ -73,9 +73,6 @@ class RandomCrop(object):
 
         h, w = image.shape[:2]
         new_h, new_w = self.output_size
-
-#         points = np.array(np.where(sample[1])).T
-#         if np.random.random > .5 or len(points[0])==0:
         top = np.random.randint(0, h - new_h)
         left = np.random.randint(0, w - new_w)
 
