@@ -10,8 +10,8 @@ from torch.utils.data import Dataset
 
 
 def calculate_distance(true_coords_vector, coords_vector):
+    """calculate metric"""
     if len(coords_vector) == 0 and len(true_coords_vector) != 0:
-        res = 0
         return np.sum(sc_distance.cdist(np.array([[100, 100]]), true_coords_vector,
                                         'euclidean')) + 16*len(true_coords_vector)
     if len(coords_vector) != 0 and len(true_coords_vector) == 0:
@@ -29,8 +29,16 @@ def calculate_distance(true_coords_vector, coords_vector):
     distance_from_true = np.sum(distance_from_true_array)
     return np.sum(distance_from_found_array) + np.sum(distance_from_true_array)
 
-class FermiDataset(Dataset):
+def create_target(y):
+    """create mask from list of points"""
+    mask = np.zeros((200, 200), dtype=np.int32)
+    for coord in y:
+        mask[coord[0], coord[1]] = 1
+    return np.array(mask, dtype=np.int64)
 
+
+class FermiDataset(Dataset):
+    """sample fermi data"""
     def __init__(self, images_path, points_path, transform=None):
         self.images_path = images_path
         self.points_path = points_path
@@ -40,19 +48,12 @@ class FermiDataset(Dataset):
     def __len__(self):
         return len(self.index)
 
-    def create_target(self, y):
-        mask = np.zeros((200, 200), dtype=np.int32)
-        for coord in y:
-            mask[coord[0], coord[1]] = 1
-        return np.array(mask, dtype=np.int64)
-
-
     def __getitem__(self, idx):
 
         image = np.load(os.path.join(self.images_path, self.index[idx]))
         image = image.reshape(*image.shape, -1)
         points = np.load(os.path.join(self.points_path, self.index[idx]))
-        mask = np.array(self.create_target(points)).reshape(*image.shape[:2])
+        mask = np.array(create_target(points)).reshape(*image.shape[:2])
         sample = tuple([image, mask])
         if self.transform:
             sample = self.transform(sample)
@@ -60,6 +61,7 @@ class FermiDataset(Dataset):
         return sample
 
 class RandomCrop(object):
+    """random crop"""
     def __init__(self, output_size):
         assert isinstance(output_size, (int, tuple))
         if isinstance(output_size, int):
@@ -85,7 +87,7 @@ class RandomCrop(object):
         return tuple([image, mask])
 
 class RandomCropNearPoints(object):
-    #doesnt work right now
+    """crop near points"""
     def __init__(self, output_size):
         assert isinstance(output_size, (int, tuple))
         if isinstance(output_size, int):
@@ -97,27 +99,52 @@ class RandomCropNearPoints(object):
     def __call__(self, sample):
         image, mask = sample[0], sample[1]
 
-        h, w = image.shape[:2]
-        new_h, new_w = self.output_size
-
+        shape = image.shape[:2]
+        output_size = self.output_size
 
         points = np.array(np.where(sample[1])).T
 
-        # crop near to answer with probability .5.
-
-        if np.random.random > .5 or len(points[0]) == 0:
+        if np.random.random() > .5 or len(points) == 0:
             #usiual crop
-            top = np.random.randint(0, h - new_h)
-            left = np.random.randint(0, w - new_w)
+            top = np.random.randint(0, shape[0] - output_size[0])
+            left = np.random.randint(0, shape[1] - output_size[1])
+            top = [top, top + output_size[0]]
+            left = [left, left + output_size[1]]
         else:
             #crop near random point
-            sample_point = np.random.choice(points)
-            left = np.random.randint(0, h - sample_point[0])
-            right = np.random.randint(0, w - sample_point[1])
+            ix = np.random.choice(np.arange(len(points)))
+            point = points[ix]
+            coords = []
+            for i in range(2):
+                if point[i] == 0:
+                    coords.append([0, output_size[i]])
+                elif point[i] == 199:
+                    coords.append([shape[i] - output_size[i], shape[i]])
+                elif point[i] > shape[i] / 2:
+                    if point[i] + output_size[i] < shape[i]:
+                        w = point[i] + np.random.randint(1, output_size[i])
+                    else:
+                        w = point[i] + np.random.randint(1, shape[i] - point[i])
+                    coords.append([w - output_size[i], w])
+                else:
+                    if point[i] - output_size[i] > 0:
+                        w = point[i] - np.random.randint(0, output_size[i])
+                    else:
+                        w = np.random.randint(0, point[i])
+                    coords.append([w, w + output_size[i]])
+            top, left = coords[0], coords[1]
 
-        return None
+        image = image[top[0]: top[1],
+                      left[0]: left[1]]
+
+        mask = mask[top[0]: top[1],
+                    left[0]: left[1]]
+
+
+        return tuple([image, mask])
 
 class OneHotEncoding(object):
+    """ohe"""
     def __init__(self, num_classes):
         if isinstance(num_classes, int):
             self.num_classes = num_classes
@@ -130,6 +157,7 @@ class OneHotEncoding(object):
         return tuple([image, mask])
 
 class ToTensor(object):
+    """create torch tensors"""
     def __call__(self, sample):
         image, mask = sample[0], sample[1]
         image = image.transpose((2, 0, 1))
