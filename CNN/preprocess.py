@@ -88,13 +88,14 @@ class RandomCrop(object):
 
 class RandomCropNearPoints(object):
     """crop near points"""
-    def __init__(self, output_size):
+    def __init__(self, output_size, prob):
         assert isinstance(output_size, (int, tuple))
         if isinstance(output_size, int):
             self.output_size = (output_size, output_size)
         else:
             assert len(output_size) == 2
             self.output_size = output_size
+        self.prob = prob
 
     def __call__(self, sample):
         image, mask = sample[0], sample[1]
@@ -104,7 +105,7 @@ class RandomCropNearPoints(object):
 
         points = np.array(np.where(sample[1])).T
 
-        if np.random.random() > .5 or len(points) == 0:
+        if np.random.random() > self.prob or len(points) == 0:
             #usiual crop
             top = np.random.randint(0, shape[0] - output_size[0])
             left = np.random.randint(0, shape[1] - output_size[1])
