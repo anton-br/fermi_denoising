@@ -13,10 +13,10 @@ def calculate_distance(true_coords_vector, coords_vector):
     """calculate metric"""
     if len(coords_vector) == 0 and len(true_coords_vector) != 0:
         return np.sum(sc_distance.cdist(np.array([[100, 100]]), true_coords_vector,
-                                        'euclidean')) + 16*len(true_coords_vector)
+                                        'euclidean')) + 16 * len(true_coords_vector)
     if len(coords_vector) != 0 and len(true_coords_vector) == 0:
         return np.sum(sc_distance.cdist(np.array([[100, 100]]), coords_vector,
-                                        'euclidean')) + 16*len(coords_vector)
+                                        'euclidean')) + 16 * len(coords_vector)
     if len(coords_vector) == 0 and len(true_coords_vector) == 0:
         return 0
     true_coords = np.vstack(tuple({tuple(row) for row in true_coords_vector}))
@@ -36,6 +36,33 @@ def create_target(y):
         mask[coord[0], coord[1]] = 1
     return np.array(mask, dtype=np.int64)
 
+def draw_plots(lenght, dset, titles):
+    """draw examples of data"""
+    num_subplots = len(titles)
+    _, ax = plt.subplots(num_subplots, lenght, figsize=(15, 15))
+    indices = np.random.choice(range(len(dset)), replace=False, size=lenght)
+    for ix, i in enumerate(indices):
+        sample = dset[i]
+        reshape_size = sample[0].shape[:2]
+        plt.tight_layout()
+        for j, (title, spl) in enumerate(zip(titles, sample)):
+            ax[j][ix].grid()
+            ax[j][ix].set_title(title + ' #{}'.format(i))
+            ax[j][ix].imshow(spl.reshape(*reshape_size))
+        plt.subplots_adjust(wspace=0.1, hspace=-0.6)
+
+def plot_stats(loss, acc, name):
+    """draw train and test statistics"""
+    _, ax = plt.subplots(1, 2, figsize=(20, 7))
+    ax[0].plot(loss)
+    ax[0].set_title(name + ' Loss')
+    ax[0].set_xlabel('Iteration')
+    ax[0].set_ylabel('Loss')
+    ax[1].plot(acc)
+    ax[1].set_title(name + ' Distance')
+    ax[1].set_xlabel('Iteration')
+    ax[1].set_ylabel('Distance')
+    plt.show()
 
 class FermiDataset(Dataset):
     """sample fermi data"""
