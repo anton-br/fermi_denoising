@@ -9,7 +9,7 @@ from scipy.spatial import distance as sc_distance
 import torch
 from torch.utils.data import Dataset
 
-def find_optimal_thr(model, images, masks, threshold):
+def find_optimal_thr(model, images, masks, threshold, size, step):
     """Find optimal threshold from given threshold's.
     
     Parameters
@@ -29,12 +29,13 @@ def find_optimal_thr(model, images, masks, threshold):
         distance with each threshold
     """
     g_dist = []
-    for tr in tqdm(threshold):
+    for tr in threshold:
         dist = []
         for img, msk in zip(images, masks):
-            img_tens = torch.Tensor(list_crop(img.reshape(1, 200, 200), 40))
-            img_sigm = sigmoid(model.model(img_tens.to('cuda')).cpu().detach().numpy()).transpose(0, 2, 3, 1)[:,:,:,1]
-            assemble_img = assemble_imgs(img_sigm, (200, 200))
+            img_tens = torch.Tensor(list_crop(img.reshape(1, 200, 200), size, step))
+            img_sigm = sigmoid(model.model(img_tens.to('cuda')).cpu()
+                               .detach().numpy()).transpose(0, 2, 3, 1)[:,:,:,1]
+            assemble_img = assemble_imgs(img_sigm, (200, 200), step)
             filt_pred = filter_prediction(np.array(assemble_img > tr))
             img = np.array(np.where(filt_pred > tr)).T
             mask = np.array(np.where(msk)).T
@@ -42,7 +43,7 @@ def find_optimal_thr(model, images, masks, threshold):
         g_dist.append(np.mean(dist))
     return g_dist, threshold[np.argmin(g_dist)]
 
-def list_crop(image, size):
+def list_crop(image, size, step):
     """Crop image on many images with size equal to ```size```.
     
     Parameters
@@ -58,12 +59,12 @@ def list_crop(image, size):
         List with images size ```size```.
         """
     imgs = []
-    for i in range(0, 200, size):
-        for j in range(0, 200, size):
+    for i in range(0, 200-size+1, step):
+        for j in range(0, 200-size+1, step):
             imgs.append(image[:, i : i+size, j : j+size].reshape(-1, size, size))
     return imgs
 
-def assemble_imgs(list_imgs, out_size):
+def assemble_imgs(list_imgs, out_size, step):
     """Assemble croped images.
     
     list_imgs : list
@@ -71,19 +72,21 @@ def assemble_imgs(list_imgs, out_size):
     out_size : int
         Size of assembled image.
     
-    Returns
+    Re sturns
     -------
         : 2d ndarray
         Assembled image.
     """
     image = np.zeros((out_size))
+    norm = np.zeros((out_size))
     size = list_imgs[0].shape[1]
     num_img = 0
-    for i in range(0, out_size[0], size):
-        for j in range(0, out_size[1], size):
-            image[i : i+size, j : j+size] = list_imgs[num_img]
+    for i in range(0, out_size[0]-size+1, step):
+        for j in range(0, out_size[1]-size+1, step):
+            image[i : i+size, j : j+size] += list_imgs[num_img]#.reshape(list_imgs[0].shape[1:])
+            norm[i : i+size, j : j+size] += 1
             num_img += 1
-    return image
+    return image/norm
 
 def filter_prediction(predict):
     """Searches for points that are closer than 2 pixels to each other
